@@ -24,7 +24,7 @@ After the container starts, run the read-only smoke test.
 The script verifies simulator and database health, the current instance, the baseline counts of two regions, two depots, four stations, and six routes, and the HTTP responses for Swagger UI and the admin dashboard.
 
 - In [Swagger UI](http://localhost:8000/docs), expand `GET /v1/health`, select **Try it out**, and execute the request. Expect HTTP 200 with simulator and database status `ok`. Repeat with `GET /v1/instance` to inspect the clock and current state.
-- In the [admin dashboard](http://localhost:8000/admin), inspect the instance state, metrics, row counts, and recent audit entries. On a fresh paused instance, use **Step** once to advance one tick. Confirm the tick increments by one in `GET /v1/instance` and the new tick appears in the audit log. This changes local simulator state.
+- In the [admin dashboard](http://localhost:8000/admin), inspect the instance state, metrics, row counts, and recent audit entries. On a fresh paused instance, use **Step one tick**. Confirm the instance advances from tick 0 to tick 1 and the audit log records `simulation.tick` for the processed tick (tick 0). This changes local simulator state.
 
 If a request fails during startup, inspect the logs and rerun the smoke test once the API is ready.
 
