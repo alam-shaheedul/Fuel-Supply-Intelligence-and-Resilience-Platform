@@ -33,3 +33,28 @@ docker compose logs --tail 100 simulator-api
 ```
 
 Use `docker compose stop` to stop the simulator and `docker compose start` to resume the existing container.
+
+## Phase 2 — FastAPI backend foundation
+
+With Python 3.11 or newer installed, run these commands from the repository root while the simulator is running.
+
+```powershell
+python -m venv .venv
+& .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+& .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001
+```
+
+The backend exposes its own [Swagger UI](http://127.0.0.1:8001/docs) on port 8001. Verify the health endpoint from a second terminal.
+
+```powershell
+curl.exe -i http://127.0.0.1:8001/health
+```
+
+`GET /health` returns HTTP 200 with `{"status":"ok","simulator":"ok"}` when the simulator reports that its API and database are healthy. A failed simulator check returns HTTP 503 with `status` set to `degraded`, `simulator` set to `unavailable`, and a machine-readable `error.code`. The backend can start even while the simulator is offline.
+
+Set configuration through environment variables or the root `.env` file.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SIMULATOR_BASE_URL` | `http://127.0.0.1:8000` | Simulator API origin |
+| `SIMULATOR_TIMEOUT_SECONDS` | `3` | HTTP client timeout in seconds |
