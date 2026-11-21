@@ -58,3 +58,26 @@ Set configuration through environment variables or the root `.env` file.
 | --- | --- | --- |
 | `SIMULATOR_BASE_URL` | `http://127.0.0.1:8000` | Simulator API origin |
 | `SIMULATOR_TIMEOUT_SECONDS` | `3` | HTTP client timeout in seconds |
+| `SIMULATOR_STREAM_READ_TIMEOUT_SECONDS` | `30` | SSE idle read timeout in seconds. Must exceed the simulator's 15-second heartbeat interval |
+
+## Phase 3 — Simulator integration
+
+With the simulator and backend running, open the [backend API docs](http://127.0.0.1:8001/docs). The backend exposes these simulator routes under `/v1`.
+
+| Method | Routes |
+| --- | --- |
+| GET | `/instance`, `/regions`, `/depots`, `/depots/{entity_id}`, `/stations`, `/stations/{entity_id}`, `/routes` |
+| GET | `/supply-arrivals`, `/events`, `/demand-history`, `/metrics`, `/allocations` |
+| POST | `/allocations`, `/allocations/{allocation_id}/cancel` |
+| GET | `/stream` (server-sent events) |
+
+```powershell
+curl.exe -i "http://127.0.0.1:8001/v1/demand-history?station_id=station-mirpur&limit=5"
+curl.exe -N http://127.0.0.1:8001/v1/stream
+```
+
+Demand history accepts an optional station ID and a limit from 1 to 2000 (default 200). The backend forwards `X-Simulator-Stale` on REST reads when the simulator provides it. SSE forwards the simulator's events and heartbeats. Treat events as change notifications and fetch current state over REST after a notification or reconnection. The simulator provides no event replay.
+
+Submit an allocation with `idempotency_key`, `source_depot_id`, `destination_station_id`, `route_id`, `fuel_type`, and a positive `quantity`. Reuse the same key and body when retrying the same submission. The simulator validates inventory, capacity, and routes. Cancel by allocation ID while its status is `PENDING`.
+
+The integration preserves simulator 404, 409, 422, and 503 statuses and surfaces the simulator's error code when available. Local request validation uses FastAPI's 422 response. An upstream timeout returns 504, an unreachable simulator returns 503, and an invalid upstream response returns 502.

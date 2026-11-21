@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .config import Settings
+from .routes import router
 from .simulator import SimulatorClient, SimulatorError
 
 
@@ -34,15 +35,22 @@ async def lifespan(app: FastAPI):
         timeout=settings.simulator_timeout_seconds,
         trust_env=False,
     ) as http_client:
-        app.state.simulator = SimulatorClient(http_client)
+        app.state.simulator = SimulatorClient(http_client, settings.simulator_stream_read_timeout_seconds)
         yield
 
 
 app = FastAPI(title="Fuel Supply Intelligence and Resilience Platform", lifespan=lifespan)
+app.include_router(router)
 
 
 @app.exception_handler(SimulatorError)
-async def handle_simulator_error(_request: Request, exc: SimulatorError) -> JSONResponse:
+async def handle_simulator_error(request: Request, exc: SimulatorError) -> JSONResponse:
+    if request.url.path.rstrip("/") != "/health":
+        error = ErrorDetail(code=exc.code, message=str(exc)).model_dump()
+        if exc.details is not None:
+            error["details"] = exc.details
+        return JSONResponse(status_code=exc.status_code, content={"error": error})
+
     body = DegradedHealthResponse(
         status="degraded",
         simulator="unavailable",
