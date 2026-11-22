@@ -10,7 +10,7 @@ export function Status({ value, tone }) {
   const color = tone ?? ({
     OPEN: 'good', AVAILABLE: 'good', RUNNING: 'good', ok: 'good',
     PAUSED: 'warn', CONSTRAINED: 'warn', anomaly: 'warn', DISRUPTED: 'bad',
-    PENDING: 'warn', IN_TRANSIT: 'warn', ARRIVED: 'good', FAILED: 'bad',
+    PENDING: 'warn', IN_TRANSIT: 'warn', DELAYED: 'warn', ARRIVED: 'good', FAILED: 'bad',
   }[value] ?? 'neutral')
   return <span className={`status ${color}`}>{label(value)}</span>
 }
@@ -24,7 +24,7 @@ export function Panel({ title, caption, action, children, className = '' }) {
 
 export function ReadState({ entry, children }) {
   if (!entry) return <p className="empty" role="status">Loading data…</p>
-  if (entry.error) return <p className="notice error" role="alert">{entry.error}</p>
+  if (entry.error && entry.value === undefined) return <p className="notice error" role="alert">{entry.error}</p>
   return children(entry.value)
 }
 

@@ -69,9 +69,9 @@ export function Workflow({ plan, allocations, instance, onChange }) {
   </Panel>
 }
 
-export function Shipments({ entry }) {
+export function Shipments({ entry, arrivals }) {
   const [filter, setFilter] = useState('')
-  return <Panel title="Simulator shipments" action={<label className="shipment-filter">Status
+  return <><Panel title="Simulator shipments" action={<label className="shipment-filter">Status
     <select value={filter} onChange={(event) => setFilter(event.target.value)}>
       <option value="">All statuses</option>
       {shipmentStatuses.map((item) => <option value={item} key={item}>{label(item)}</option>)}
@@ -89,4 +89,14 @@ export function Shipments({ entry }) {
       </table></div> : <p className="empty">No shipments match this view.</p>
     }}</ReadState>
   </Panel>
+    <Panel title="Depot resupply" caption="Scheduled depot deliveries and revised arrival ticks">
+      <ReadState entry={arrivals}>{(items) => items.length ? <div className="table-scroll"><table>
+        <thead><tr><th>Delivery</th><th>Depot</th><th>Fuel</th><th>Quantity</th><th>Status</th><th>Planned tick</th><th>Actual tick</th></tr></thead>
+        <tbody>{items.map((item) => <tr key={item.id}>
+          <td>{item.id}</td><td>{item.depot_id}</td><td>{label(item.fuel_type)}</td><td>{liters(item.quantity)}</td>
+          <td><Status value={item.status} /></td><td>{item.planned_tick}</td><td>{item.actual_tick ?? '—'}</td>
+        </tr>)}</tbody>
+      </table></div> : <p className="empty">No depot deliveries returned.</p>}</ReadState>
+    </Panel>
+  </>
 }

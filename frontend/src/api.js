@@ -28,6 +28,7 @@ const reads = {
   routes: '/v1/routes',
   metrics: '/v1/metrics',
   allocations: '/v1/allocations',
+  arrivals: '/v1/supply-arrivals',
   history: '/v1/recommendations?limit=50',
 }
 
@@ -40,4 +41,17 @@ export async function readDashboard(signal) {
     }
   }))
   return Object.fromEntries(entries)
+}
+
+const cacheable = new Set(['instance', 'depots', 'stations', 'routes', 'metrics', 'allocations', 'arrivals'])
+
+export function mergeDashboard(previous, next) {
+  return Object.fromEntries(Object.entries(next).map(([key, entry]) => {
+    if (!cacheable.has(key) || (!entry.error && !entry.stale)) return [key, entry]
+    const prior = previous[key]
+    if (prior?.value !== undefined && (prior.cached || (!prior.error && !prior.stale))) {
+      return [key, { ...entry, value: prior.value, cached: true }]
+    }
+    return [key, entry]
+  }))
 }

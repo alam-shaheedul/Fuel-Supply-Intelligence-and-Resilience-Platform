@@ -29,12 +29,12 @@ function Health({ data }) {
   const services = [
     { title: 'Backend', icon: Server, entry: data.backend, available: Boolean(data.backend?.value || data.backend?.status === 503) },
     { title: 'PostgreSQL', icon: Database, entry: data.database, available: data.database?.value?.database === 'ok' },
-    { title: 'Simulator', icon: Activity, entry: data.instance, available: Boolean(data.instance?.value) },
+    { title: 'Simulator', icon: Activity, entry: data.instance, available: Boolean(data.instance?.value && !data.instance.error && !data.instance.stale) },
   ]
   return <div className="inventory-grid">{services.map(({ title, icon: Icon, entry, available }) => <Panel
     key={title} title={title}
     action={<Status value={!entry ? 'checking' : available ? 'reachable' : 'unavailable'} tone={!entry ? 'neutral' : available ? 'good' : 'bad'} />}>
-    <p className="service-info"><Icon size={21} aria-hidden="true" />{entry?.error ?? (entry ? 'Responding to requests' : 'Checking connection…')}</p>
+    <p className="service-info"><Icon size={21} aria-hidden="true" />{entry?.error ?? (entry?.stale ? 'The last response was marked stale' : entry ? 'Responding to requests' : 'Checking connection…')}</p>
   </Panel>)}</div>
 }
 
@@ -67,15 +67,18 @@ function App() {
 
   const instance = data.instance?.value
   const allocations = data.allocations?.value ?? []
-  const workflowProps = { instance: data.instance?.stale ? null : instance, allocations, onChange: reload }
+  const currentState = [data.instance, data.depots, data.stations, data.routes, data.allocations]
+    .every((entry) => entry?.value && !entry.error && !entry.stale && !entry.cached)
+  const workflowProps = { instance: currentState ? instance : null, allocations, onChange: reload }
   const stale = Object.values(data).some((entry) => entry.stale)
+  const cached = Object.values(data).some((entry) => entry.cached)
   const views = {
     overview: <Overview data={data} navigate={navigate} />,
     depots: <Inventory entry={data.depots} kind="depots" />,
     stations: <Inventory entry={data.stations} kind="stations" />,
     predictions: <Predictions stations={data.stations?.value ?? []} prediction={predictions[0]} onPrediction={savePrediction} />,
     recommendations: <Recommendations {...workflowProps} predictions={predictions} value={recommendation} onRecommendation={saveRecommendation} />,
-    shipments: <Shipments entry={data.allocations} />,
+    shipments: <Shipments entry={data.allocations} arrivals={data.arrivals} />,
     history: <History {...workflowProps} entry={data.history} />,
     health: <Health data={data} />,
   }
@@ -93,7 +96,8 @@ function App() {
         </a>)}
       </nav>
       <div className="sidebar-bottom"><div><Activity size={17} aria-hidden="true" />Simulator</div>
-        <Status value={instance?.status ?? (data.instance ? 'unavailable' : 'checking')} tone={data.instance?.error ? 'bad' : undefined} />
+        <Status value={data.instance?.error ? 'unavailable' : data.instance?.stale ? 'stale' : instance?.status ?? 'checking'}
+          tone={data.instance?.error ? 'bad' : data.instance?.stale ? 'warn' : undefined} />
       </div>
     </aside>
     <div className="workspace">
@@ -107,6 +111,7 @@ function App() {
           {checked && <span className="last-checked">Checked {checked.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
         </div>
         {stale && <p role="alert" className="notice"><AlertTriangle size={18} aria-hidden="true" />The simulator marked some dashboard data as stale.</p>}
+        {cached && <p role="alert" className="notice"><AlertTriangle size={18} aria-hidden="true" />Some values are from the last successful refresh. Check live data before acting.</p>}
         {data.instance?.error && page.id !== 'health' && <p role="alert" className="notice error"><AlertTriangle size={18} aria-hidden="true" />Simulator connection unavailable.</p>}
         {views[page.id]}
       </main>

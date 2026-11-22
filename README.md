@@ -189,3 +189,17 @@ Start the dashboard, FastAPI, simulator, and PostgreSQL as above. The dashboard 
 5. Use **Shipments** or reopen the plan in **Decision history** to monitor allocation status and arrival ticks. If a submission is interrupted, retry from the saved plan. The backend uses stable idempotency keys to reconcile prior submissions and avoid duplicates. New shipments require a new plan after the simulator advances or is reset.
 
 The recommendation workflow uses `GET /v1/recommendations/{id}/workflow`, `POST /v1/recommendations/{id}/approve` with `{"operator":"Name"}`, and `POST /v1/recommendations/{id}/execute`. Add `?reconcile_only=true` to check previously accepted allocations without submitting new ones. Approval records, allocation references, and the latest execution error are stored with the existing PostgreSQL decision log. There is no new migration for this workflow.
+
+## Phase 9 — Crisis and recovery tests
+
+With Docker Desktop running and the backend dependencies installed, run these commands from the repository root.
+
+```powershell
+& .\.venv\Scripts\python.exe -m scripts.test_crisis
+npm.cmd --prefix frontend test
+npm.cmd --prefix frontend run build
+```
+
+The crisis harness starts a disposable paused simulator on a random loopback port, runs FastAPI against it, and stops it after the test. It exercises demand spikes, route disruptions, constrained depots, delayed depot resupply, API unavailability, stale responses, and SSE disconnects. It verifies that the optimizer avoids disrupted routes, checks depot capacity, and that delayed deliveries are later marked arrived. The shipment-delay event affects scheduled depot resupply, which appears under **Shipments → Depot resupply**.
+
+During an outage or stale response, the dashboard labels previously fresh values as cached. The approval view requires fresh logistics data before enabling new submissions, and the backend rechecks the simulator state. REST polling continues during a stream interruption. SSE reconnect attempts start at five seconds, back off to 30 seconds, and reset after a successful connection. Reconnection triggers a fresh REST read.

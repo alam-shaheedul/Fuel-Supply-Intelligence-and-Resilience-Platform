@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { readDashboard } from './api'
-
-const updates = ['simulation.tick', 'allocation.status_changed', 'inventory.updated', 'simulator.notice']
+import { mergeDashboard, readDashboard } from './api'
+import { subscribeSimulator } from './live'
 
 export function useDashboard() {
   const [data, setData] = useState({})
@@ -11,8 +10,6 @@ export function useDashboard() {
   const refreshAction = useRef(null)
 
   useEffect(() => {
-    let source
-    let reconnect
     let scheduled
     let inFlight = false
     let queued = false
@@ -28,7 +25,7 @@ export function useDashboard() {
       try {
         const snapshot = await readDashboard(controller.signal)
         if (!controller.signal.aborted) {
-          setData(snapshot)
+          setData((previous) => mergeDashboard(previous, snapshot))
           setChecked(new Date())
         }
       } finally {
@@ -51,30 +48,14 @@ export function useDashboard() {
       }, 1000)
     }
 
-    function connect() {
-      source = new EventSource('/api/v1/stream')
-      source.onopen = () => {
-        setConnection('live')
-        scheduleRefresh()
-      }
-      source.onerror = () => {
-        source.close()
-        setConnection('polling')
-        scheduleRefresh()
-        reconnect = window.setTimeout(connect, 5000)
-      }
-      for (const event of updates) source.addEventListener(event, scheduleRefresh)
-    }
-
     refreshAction.current = () => void refresh(true)
     void refresh(true)
-    connect()
+    const disconnect = subscribeSimulator(scheduleRefresh, setConnection)
     const poll = window.setInterval(scheduleRefresh, 8000)
     return () => {
       refreshAction.current = null
       controller.abort()
-      source?.close()
-      window.clearTimeout(reconnect)
+      disconnect()
       window.clearTimeout(scheduled)
       window.clearInterval(poll)
     }
