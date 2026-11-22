@@ -110,4 +110,37 @@ Use the same run ID for repeat imports from the same simulator run. Choose a new
 | `predictions` | Run, station, fuel, source and target ticks, model version, prediction kind, and result |
 | `decision_logs` | Run, decision key, tick, status, explanation, optional simulator allocation ID, and details |
 
-The functions `store_prediction` and `append_decision` in `backend.app.db.repository` accept SQLAlchemy models and write within the caller's transaction. Prediction generation and decision automation are implemented in later phases.
+The functions `store_prediction` and `append_decision` in `backend.app.db.repository` accept SQLAlchemy models and write within the caller's transaction.
+
+## Phase 5 — Demand intelligence
+
+Install the updated backend requirements, start the simulator and PostgreSQL, and apply the database migration. For a consistent example, pause the simulator, import its latest demand history, and use the same run ID in the prediction request. A paused simulator must have processed at least one tick to have demand observations.
+
+```powershell
+& .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+& .\.venv\Scripts\python.exe -m alembic upgrade head
+& .\.venv\Scripts\python.exe -m backend.app.db.import_history --run-id baseline-01
+```
+
+With the backend running on port 8001, generate and retrieve a prediction.
+
+```powershell
+$body = @{
+    run_id = "baseline-01"
+    station_id = "station-mirpur"
+    fuel_type = "DIESEL"
+    horizon_ticks = 8
+} | ConvertTo-Json
+$prediction = Invoke-RestMethod http://127.0.0.1:8001/v1/predictions -Method Post -ContentType application/json -Body $body
+$prediction | ConvertTo-Json -Depth 8
+Invoke-RestMethod "http://127.0.0.1:8001/v1/predictions/$($prediction.id)"
+```
+
+The API uses up to 512 consecutive stored ticks for the requested station and fuel. A scikit-learn ridge model uses recent demand lags and a rolling mean. With fewer than 36 consecutive observations, the forecast uses the last observed demand. The result includes descriptive statistics, per-tick demand for a horizon of 1–24 ticks, a shortage projection, the latest anomaly check, and forecast evaluation when sufficient history exists. Each generated result is saved to PostgreSQL.
+
+- Shortage projections subtract forecast demand from current inventory and assume zero replenishment during the horizon.
+- Anomaly detection compares the latest observation with the previous 12–48 observations using a robust median and median absolute deviation score. With less history, it reports insufficient history.
+- Evaluation uses a chronological holdout with expanding forecast origins. It reports mean absolute error (MAE), root mean squared error (RMSE), and the MAE of a last-observation baseline. Evaluation is unavailable when the holdout is smaller than eight observations or the requested horizon.
+- The API rejects stale inventory. If the simulator moves while inventory is being read or the stored demand ends before the last completed tick, retry with a stable snapshot and a current import from the same simulator run.
+
+For the Phase 5 verification, the baseline simulator ran with seed `12345` for 140 ticks at 15 simulated minutes per tick. It produced 1,680 observations across 12 station-and-fuel series. At an eight-tick forecast horizon, the final 28 observations per series were held out. Across those series, mean MAE was **22.23 L** for ridge and **22.83 L** for the last-observation baseline. Mean ridge RMSE was **31.79 L**. These figures describe this one baseline simulation run.
