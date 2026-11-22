@@ -3,6 +3,7 @@ anyio>=4,<5
 fastapi>=0.115,<1
 httpx>=0.28,<1
 numpy>=2.2,<3
+ortools>=9.14,<10
 pandas>=2.2,<4
 pydantic-settings>=2.7,<3
 psycopg[binary]>=3.2,<4

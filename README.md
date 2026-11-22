@@ -144,3 +144,21 @@ The API uses up to 512 consecutive stored ticks for the requested station and fu
 - The API rejects stale inventory. If the simulator moves while inventory is being read or the stored demand ends before the last completed tick, retry with a stable snapshot and a current import from the same simulator run.
 
 For the Phase 5 verification, the baseline simulator ran with seed `12345` for 140 ticks at 15 simulated minutes per tick. It produced 1,680 observations across 12 station-and-fuel series. At an eight-tick forecast horizon, the final 28 observations per series were held out. Across those series, mean MAE was **22.23 L** for ridge and **22.83 L** for the last-observation baseline. Mean ridge RMSE was **31.79 L**. These figures describe this one baseline simulation run.
+
+## Phase 6 — Allocation recommendations
+
+Install the updated backend requirements to add Google OR-Tools. Generate predictions at the same simulator tick for the station and fuel combinations you want to plan together. Submit their saved IDs as one request to let the solver account for shared depot stock and dispatch capacity.
+
+```powershell
+$body = @{ prediction_ids = @($prediction.id) } | ConvertTo-Json
+$recommendation = Invoke-RestMethod http://127.0.0.1:8001/v1/recommendations -Method Post -ContentType application/json -Body $body
+$recommendation | ConvertTo-Json -Depth 8
+Invoke-RestMethod "http://127.0.0.1:8001/v1/recommendations/$($recommendation.id)"
+```
+
+- The backend checks current depot and station inventory, routes, and active allocations. Predictions must come from one run and start at the current simulator tick. Use a common forecast horizon when comparing stations.
+- Each station and fuel gets a score based on when its first shortage is projected and what share of forecast demand is projected to go unmet after scheduled arrivals. Earlier and larger shortages get more weight. The solver maximizes weighted shortage coverage and favors faster routes when priority is equal.
+- The solver recommends whole liters and enforces route shipment limits, depot stock, shared dispatch capacity, and station tank space. Pending and in-transit shipments reserve tank space. Pending shipments and current-tick in-transit shipments reserve dispatch capacity. Estimated arrival is the current tick plus route transit time. A shipment can only cover forecast shortages at or after this tick.
+- The response explains each selected shipment and includes an assessment for every requested station and fuel, including those that received no recommendation. Each plan is saved to the decision log and can be retrieved by ID.
+
+The recommendation endpoint reads simulator state and saves a proposed plan in PostgreSQL. The operator should recheck capacity against current simulator state before submitting an allocation through `POST /v1/allocations`.
