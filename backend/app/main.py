@@ -2,11 +2,14 @@ from contextlib import asynccontextmanager
 from typing import Literal
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from .config import Settings
+from .db.connection import database_engine
 from .routes import router
 from .simulator import SimulatorClient, SimulatorError
 
@@ -30,13 +33,18 @@ class DegradedHealthResponse(BaseModel):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = Settings()
-    async with httpx.AsyncClient(
-        base_url=str(settings.simulator_base_url).rstrip("/") + "/",
-        timeout=settings.simulator_timeout_seconds,
-        trust_env=False,
-    ) as http_client:
-        app.state.simulator = SimulatorClient(http_client, settings.simulator_stream_read_timeout_seconds)
-        yield
+    engine = database_engine(settings)
+    app.state.database = engine
+    try:
+        async with httpx.AsyncClient(
+            base_url=str(settings.simulator_base_url).rstrip("/") + "/",
+            timeout=settings.simulator_timeout_seconds,
+            trust_env=False,
+        ) as http_client:
+            app.state.simulator = SimulatorClient(http_client, settings.simulator_stream_read_timeout_seconds)
+            yield
+    finally:
+        engine.dispose()
 
 
 app = FastAPI(title="Fuel Supply Intelligence and Resilience Platform", lifespan=lifespan)
@@ -64,3 +72,13 @@ async def health(request: Request) -> HealthResponse:
     simulator: SimulatorClient = request.app.state.simulator
     await simulator.check_health()
     return HealthResponse(status="ok", simulator="ok")
+
+
+@app.get("/health/database", responses={503: {"description": "Database unavailable"}})
+def database_health(request: Request) -> dict[str, str]:
+    try:
+        with request.app.state.database.connect() as connection:
+            connection.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        raise HTTPException(status_code=503, detail="PostgreSQL is unavailable.") from None
+    return {"status": "ok", "database": "ok"}

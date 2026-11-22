@@ -7,3 +7,22 @@ services:
       SIMULATOR_START_MODE: "${SIMULATOR_START_MODE:-paused}"
     ports:
       - "127.0.0.1:8000:8000"
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: fuel_platform
+      POSTGRES_USER: fuel_platform
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-fuel_platform_local}"
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "fuel_platform", "-d", "fuel_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  postgres-data:

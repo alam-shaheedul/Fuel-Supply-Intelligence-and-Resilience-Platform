@@ -81,3 +81,33 @@ Demand history accepts an optional station ID and a limit from 1 to 2000 (defaul
 Submit an allocation with `idempotency_key`, `source_depot_id`, `destination_station_id`, `route_id`, `fuel_type`, and a positive `quantity`. Reuse the same key and body when retrying the same submission. The simulator validates inventory, capacity, and routes. Cancel by allocation ID while its status is `PENDING`.
 
 The integration preserves simulator 404, 409, 422, and 503 statuses and surfaces the simulator's error code when available. Local request validation uses FastAPI's 422 response. An upstream timeout returns 504, an unreachable simulator returns 503, and an invalid upstream response returns 502.
+
+## Phase 4 — PostgreSQL storage
+
+From the repository root, start PostgreSQL and apply the schema migration.
+
+```powershell
+docker compose up -d --wait postgres
+& .\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
+& .\.venv\Scripts\python.exe -m alembic upgrade head
+```
+
+PostgreSQL listens on `127.0.0.1:5433` and stores data in the `postgres-data` Docker volume. To override the local development credentials on initial setup, set `POSTGRES_PASSWORD` and a matching `DATABASE_URL` in the root `.env`. The app uses a SQLAlchemy URL with the psycopg driver, such as `postgresql+psycopg://USER:PASSWORD@127.0.0.1:5433/DBNAME`. Changing the Compose password on an existing volume does not change the database role password.
+
+Start the backend as above and call `GET /health/database` to check the PostgreSQL connection. The separate `GET /health` endpoint checks the simulator.
+
+Import recent demand observations after the simulator has recorded observations.
+
+```powershell
+& .\.venv\Scripts\python.exe -m backend.app.db.import_history --run-id baseline-01
+```
+
+Use the same run ID for repeat imports from the same simulator run. Choose a new run ID after resetting or replacing the simulator, since source IDs may be reused. The command skips duplicates and rejects data marked stale. It imports up to 2,000 recent observations per request and supports `--limit` and `--station-id`. Run it periodically while collecting history so older observations stay within the simulator's available window.
+
+| Table | Stored data |
+| --- | --- |
+| `demand_observations` | Simulator run, source observation ID, station, fuel, tick, simulation time, and demand quantities |
+| `predictions` | Run, station, fuel, source and target ticks, model version, prediction kind, and result |
+| `decision_logs` | Run, decision key, tick, status, explanation, optional simulator allocation ID, and details |
+
+The functions `store_prediction` and `append_decision` in `backend.app.db.repository` accept SQLAlchemy models and write within the caller's transaction. Prediction generation and decision automation are implemented in later phases.
