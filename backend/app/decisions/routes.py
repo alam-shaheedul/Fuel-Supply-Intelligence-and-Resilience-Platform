@@ -2,9 +2,9 @@ import asyncio
 from typing import Annotated
 from uuid import uuid4
 
-from fastapi import APIRouter, Path, Request
+from fastapi import APIRouter, Path, Query, Request
 from pydantic import BaseModel, Field, ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -30,6 +30,14 @@ class RecommendationResponse(BaseModel):
     run_id: str
     tick: int
     plan: Plan
+
+
+class RecommendationSummary(BaseModel):
+    id: int
+    run_id: str
+    tick: int
+    shipment_count: int
+    solver_status: str
 
 
 async def read_snapshot(simulator: Simulator) -> Snapshot:
@@ -116,6 +124,29 @@ async def recommend(query: RecommendationRequest, request: Request, simulator: S
         raise failure(422, "DUPLICATE_PREDICTION_ID", "Each prediction ID may appear only once.")
     snapshot = await read_snapshot(simulator)
     return await run_in_threadpool(create_recommendation, request.app.state.database, query.prediction_ids, snapshot)
+
+
+@router.get("", response_model=list[RecommendationSummary])
+def recommendations(
+    request: Request,
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+) -> list[RecommendationSummary]:
+    plan = DecisionLog.details["plan"]
+    query = (
+        select(
+            DecisionLog.id, DecisionLog.run_id, DecisionLog.tick,
+            plan["solver_status"].as_string().label("solver_status"),
+            func.jsonb_array_length(plan["shipments"]).label("shipment_count"),
+        )
+        .where(DecisionLog.status == "recommendation_generated")
+        .order_by(DecisionLog.id.desc())
+        .limit(limit)
+    )
+    try:
+        with Session(request.app.state.database) as session:
+            return [RecommendationSummary.model_validate(row) for row in session.execute(query).mappings()]
+    except SQLAlchemyError as exc:
+        raise failure(503, "STORAGE_UNAVAILABLE", "Recommendation storage is unavailable.") from exc
 
 
 @router.get("/{recommendation_id}", response_model=RecommendationResponse)

@@ -162,3 +162,18 @@ Invoke-RestMethod "http://127.0.0.1:8001/v1/recommendations/$($recommendation.id
 - The response explains each selected shipment and includes an assessment for every requested station and fuel, including those that received no recommendation. Each plan is saved to the decision log and can be retrieved by ID.
 
 The recommendation endpoint reads simulator state and saves a proposed plan in PostgreSQL. The operator should recheck capacity against current simulator state before submitting an allocation through `POST /v1/allocations`.
+
+## Phase 7 — React dashboard
+
+Start the simulator and PostgreSQL with Docker Compose, apply the database migration, and run FastAPI on port 8001 using the commands above. In a second terminal, install the locked frontend dependencies and start Vite. Use Node.js 22.12 or newer.
+
+```powershell
+npm.cmd --prefix frontend ci
+npm.cmd --prefix frontend run dev
+```
+
+Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The overview shows simulator inventory and service metrics. The depot and station views show stock by fuel, and System Health checks the simulator, backend, and PostgreSQL. Use **Refresh** to reload the dashboard snapshot.
+
+To generate a forecast, pause the simulator and import demand history as described above. Enter the same run ID in **Predictions & alerts**. **Recommendations** can use prediction IDs generated during the current dashboard session or IDs you enter. **Decision history** lists the 50 most recent saved plans and opens their details. The dashboard generates proposals for review.
+
+The development proxy forwards `/api` to `http://127.0.0.1:8001`. Set `FUEL_BACKEND_URL` in the Vite process environment if your backend runs at a different address. Run `npm.cmd --prefix frontend run build` to create a static bundle in `frontend/dist`. A server hosting that bundle must route same-origin `/api/*` requests to FastAPI with the `/api` prefix removed.
