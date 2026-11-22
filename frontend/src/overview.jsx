@@ -10,6 +10,7 @@ export function Status({ value, tone }) {
   const color = tone ?? ({
     OPEN: 'good', AVAILABLE: 'good', RUNNING: 'good', ok: 'good',
     PAUSED: 'warn', CONSTRAINED: 'warn', anomaly: 'warn', DISRUPTED: 'bad',
+    PENDING: 'warn', IN_TRANSIT: 'warn', ARRIVED: 'good', FAILED: 'bad',
   }[value] ?? 'neutral')
   return <span className={`status ${color}`}>{label(value)}</span>
 }

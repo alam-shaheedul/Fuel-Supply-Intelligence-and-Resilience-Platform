@@ -4,6 +4,7 @@ from math import floor, fsum
 
 from ortools.sat.python import cp_model
 
+from .execution import active_reservations
 from .models import ForecastInput, Plan, Route, Shipment, Snapshot, StationAssessment
 
 
@@ -29,8 +30,7 @@ def build_plan(snapshot: Snapshot, forecasts: list[ForecastInput]) -> Plan:
     depots = {depot.id: depot for depot in snapshot.depots}
     stations = {station.id: station for station in snapshot.stations}
     routes = {route.id: route for route in snapshot.routes}
-    dispatch_reserved = defaultdict(float)
-    tank_reserved = defaultdict(float)
+    dispatch_reserved, tank_reserved = active_reservations(snapshot)
     scheduled_arrivals = defaultdict(float)
     candidates = []
     assessments = {}
@@ -38,10 +38,7 @@ def build_plan(snapshot: Snapshot, forecasts: list[ForecastInput]) -> Plan:
     for allocation in snapshot.allocations:
         if allocation.status not in {"PENDING", "IN_TRANSIT"}:
             continue
-        if allocation.status == "PENDING" or snapshot.tick in (allocation.created_tick, allocation.departure_tick):
-            dispatch_reserved[allocation.source_depot_id] += allocation.quantity
         key = (allocation.destination_station_id, allocation.fuel_type)
-        tank_reserved[key] += allocation.quantity
         route = routes.get(allocation.route_id)
         arrival_tick = allocation.expected_arrival_tick
         if arrival_tick is None and route and allocation.status == "PENDING" and route.status == "AVAILABLE":

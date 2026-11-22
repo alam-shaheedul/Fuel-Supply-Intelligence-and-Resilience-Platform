@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import {
   Activity, AlertTriangle, Building2, ChartNoAxesCombined, ChevronRight, ClipboardList,
-  Database, Fuel, History as HistoryIcon, LayoutDashboard, RefreshCw, Server, Truck,
+  Database, Fuel, History as HistoryIcon, LayoutDashboard, Package, RefreshCw, Server, Truck,
 } from 'lucide-react'
-import { readDashboard } from './api'
 import { format, Inventory, Overview, Panel, Status } from './overview'
 import { History, Predictions, Recommendations } from './planning'
+import { useDashboard } from './useDashboard'
+import { Shipments } from './workflow'
 import './style.css'
 
 const pages = [
@@ -15,6 +16,7 @@ const pages = [
   { id: 'stations', name: 'Stations', title: 'Station monitoring', subtitle: 'Check fuel levels and operating status across the station network.', icon: Fuel },
   { id: 'predictions', name: 'Predictions & alerts', title: 'Predictions & alerts', subtitle: 'Forecast fuel demand and identify potential shortages and anomalies.', icon: ChartNoAxesCombined },
   { id: 'recommendations', name: 'Recommendations', title: 'Allocation recommendations', subtitle: 'Generate a proposed shipment plan from saved forecasts.', icon: Truck },
+  { id: 'shipments', name: 'Shipments', title: 'Shipment monitoring', subtitle: 'Track pending, in-transit, and completed simulator allocations.', icon: Package },
   { id: 'history', name: 'Decision history', title: 'Decision history', subtitle: 'Review saved plans and their station-level explanations.', icon: HistoryIcon },
   { id: 'health', name: 'System health', title: 'System health', subtitle: 'Check the backend, database, and simulator connection.', icon: Activity },
 ]
@@ -38,10 +40,7 @@ function Health({ data }) {
 
 function App() {
   const [page, setPage] = useState(currentPage)
-  const [data, setData] = useState({})
-  const [checked, setChecked] = useState(null)
-  const [refresh, setRefresh] = useState(0)
-  const [refreshing, setRefreshing] = useState(true)
+  const { data, checked, refreshing, connection, reload } = useDashboard()
   const [predictions, setPredictions] = useState([])
   const [recommendation, setRecommendation] = useState(null)
 
@@ -51,24 +50,8 @@ function App() {
     return () => window.removeEventListener('hashchange', update)
   }, [])
 
-  useEffect(() => {
-    const controller = new AbortController()
-    readDashboard(controller.signal).then((value) => {
-      if (controller.signal.aborted) return
-      setData(value)
-      setChecked(new Date())
-      setRefreshing(false)
-    })
-    return () => controller.abort()
-  }, [refresh])
-
   function navigate(id) {
     window.location.hash = id
-  }
-
-  function reload() {
-    setRefreshing(true)
-    setRefresh((value) => value + 1)
   }
 
   function savePrediction(value) {
@@ -83,14 +66,17 @@ function App() {
   }
 
   const instance = data.instance?.value
+  const allocations = data.allocations?.value ?? []
+  const workflowProps = { instance: data.instance?.stale ? null : instance, allocations, onChange: reload }
   const stale = Object.values(data).some((entry) => entry.stale)
   const views = {
     overview: <Overview data={data} navigate={navigate} />,
     depots: <Inventory entry={data.depots} kind="depots" />,
     stations: <Inventory entry={data.stations} kind="stations" />,
     predictions: <Predictions stations={data.stations?.value ?? []} prediction={predictions[0]} onPrediction={savePrediction} />,
-    recommendations: <Recommendations predictions={predictions} tick={instance?.tick} value={recommendation} onRecommendation={saveRecommendation} />,
-    history: <History entry={data.history} />,
+    recommendations: <Recommendations {...workflowProps} predictions={predictions} value={recommendation} onRecommendation={saveRecommendation} />,
+    shipments: <Shipments entry={data.allocations} />,
+    history: <History {...workflowProps} entry={data.history} />,
     health: <Health data={data} />,
   }
 
@@ -113,7 +99,7 @@ function App() {
     <div className="workspace">
       <header className="topbar">
         <div className="breadcrumb"><ClipboardList size={17} aria-hidden="true" /><span>Operations</span><ChevronRight size={15} aria-hidden="true" /><strong>{page.name}</strong></div>
-        <div className="top-status"><span className="tick">Tick <strong>{format(instance?.tick)}</strong></span>
+        <div className="top-status"><Status value={connection} tone={connection === 'live' ? 'good' : 'neutral'} /><span className="tick">Tick <strong>{format(instance?.tick)}</strong></span>
           <button className="secondary" onClick={reload} disabled={refreshing}><RefreshCw size={16} aria-hidden="true" />{refreshing ? 'Refreshing…' : 'Refresh'}</button></div>
       </header>
       <main id="content" tabIndex={-1}>

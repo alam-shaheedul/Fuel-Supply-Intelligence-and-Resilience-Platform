@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { AlertTriangle, ChartNoAxesCombined, ClipboardList, Truck } from 'lucide-react'
 import { request } from './api'
 import { format, fuels, label, liters, Panel, ReadState, Status } from './overview'
+import { Workflow } from './workflow'
 
 export function Predictions({ stations, prediction, onPrediction }) {
   const [run, setRun] = useState('baseline-01')
@@ -95,12 +96,12 @@ export function RecommendationDetail({ value }) {
   </>
 }
 
-export function Recommendations({ predictions, tick, value, onRecommendation }) {
+export function Recommendations({ predictions, instance, allocations, value, onRecommendation, onChange }) {
   const [manual, setManual] = useState(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
-  const candidateRun = predictions.find((item) => item.source_tick + 1 === tick)?.run_id
-  const current = predictions.filter((item) => item.source_tick + 1 === tick && item.run_id === candidateRun)
+  const candidateRun = predictions.find((item) => item.source_tick + 1 === instance?.tick)?.run_id
+  const current = predictions.filter((item) => item.source_tick + 1 === instance?.tick && item.run_id === candidateRun)
   const suggested = current.map((item) => item.id).join(', ')
   const input = manual ?? suggested
 
@@ -133,11 +134,14 @@ export function Recommendations({ predictions, tick, value, onRecommendation }) 
       {manual !== null && suggested && <button className="text-button reset" onClick={() => setManual(null)}>Use current forecasts</button>}
       {error && <p className="notice error" role="alert">{error}</p>}
     </Panel>
-    {value ? <RecommendationDetail value={value} /> : <Panel title="Proposed shipments"><p className="empty"><ClipboardList aria-hidden="true" />Generate a plan to review allocation recommendations.</p></Panel>}
+    {value ? <>
+      <RecommendationDetail value={value} />
+      <Workflow key={value.id} plan={value} instance={instance} allocations={allocations} onChange={onChange} />
+    </> : <Panel title="Proposed shipments"><p className="empty"><ClipboardList aria-hidden="true" />Generate a plan to review allocation recommendations.</p></Panel>}
   </>
 }
 
-export function History({ entry }) {
+export function History({ entry, instance, allocations, onChange }) {
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(null)
   const [error, setError] = useState('')
@@ -164,6 +168,9 @@ export function History({ entry }) {
       </table></div> : <p className="empty">No saved recommendations.</p>}</ReadState>
       {error && <p className="notice error" role="alert"><AlertTriangle size={18} aria-hidden="true" />{error}</p>}
     </Panel>
-    {detail && <RecommendationDetail value={detail} />}
+    {detail && <>
+      <RecommendationDetail value={detail} />
+      <Workflow key={detail.id} plan={detail} instance={instance} allocations={allocations} onChange={onChange} />
+    </>}
   </>
 }

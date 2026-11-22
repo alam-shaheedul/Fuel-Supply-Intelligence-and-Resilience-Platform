@@ -31,6 +31,8 @@ class Route(BaseModel):
 
 
 class Allocation(BaseModel):
+    id: int | None = Field(default=None, gt=0)
+    idempotency_key: str | None = None
     source_depot_id: str
     destination_station_id: str
     route_id: str
@@ -44,6 +46,7 @@ class Allocation(BaseModel):
 
 class Snapshot(BaseModel):
     tick: int = Field(ge=0)
+    status: str | None = None
     depots: list[Depot]
     stations: list[Station]
     routes: list[Route]

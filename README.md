@@ -177,3 +177,15 @@ Open [http://127.0.0.1:5173](http://127.0.0.1:5173). The overview shows simulato
 To generate a forecast, pause the simulator and import demand history as described above. Enter the same run ID in **Predictions & alerts**. **Recommendations** can use prediction IDs generated during the current dashboard session or IDs you enter. **Decision history** lists the 50 most recent saved plans and opens their details. The dashboard generates proposals for review.
 
 The development proxy forwards `/api` to `http://127.0.0.1:8001`. Set `FUEL_BACKEND_URL` in the Vite process environment if your backend runs at a different address. Run `npm.cmd --prefix frontend run build` to create a static bundle in `frontend/dist`. A server hosting that bundle must route same-origin `/api/*` requests to FastAPI with the `/api` prefix removed.
+
+## Phase 8 — Live operations and operator approval
+
+Start the dashboard, FastAPI, simulator, and PostgreSQL as above. The dashboard refreshes snapshots from the backend when simulator events arrive over SSE. It also polls every eight seconds and reconnects if the stream is interrupted. The header shows whether the stream is live or the dashboard is using polling.
+
+1. Pause the simulator, import current demand history, and generate forecasts for the affected stations and fuels.
+2. In **Recommendations**, generate a plan from those forecasts. Review the proposed quantities, routes, and station assessments.
+3. Enter an operator name and select **Approve plan**. The name is recorded in the audit trail as entered. This local workflow assumes trusted operators and does not authenticate that name.
+4. Select **Submit approved shipments** while the simulator is still paused at the original plan tick. The backend rechecks route availability, stock, dispatch capacity, and tank space against current simulator data before submitting.
+5. Use **Shipments** or reopen the plan in **Decision history** to monitor allocation status and arrival ticks. If a submission is interrupted, retry from the saved plan. The backend uses stable idempotency keys to reconcile prior submissions and avoid duplicates. New shipments require a new plan after the simulator advances or is reset.
+
+The recommendation workflow uses `GET /v1/recommendations/{id}/workflow`, `POST /v1/recommendations/{id}/approve` with `{"operator":"Name"}`, and `POST /v1/recommendations/{id}/execute`. Add `?reconcile_only=true` to check previously accepted allocations without submitting new ones. Approval records, allocation references, and the latest execution error are stored with the existing PostgreSQL decision log. There is no new migration for this workflow.

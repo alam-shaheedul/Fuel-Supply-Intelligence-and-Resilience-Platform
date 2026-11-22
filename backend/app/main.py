@@ -11,6 +11,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from .config import Settings
 from .db.connection import database_engine
 from .decisions.routes import router as decision_router
+from .decisions.workflow import router as workflow_router
 from .intelligence.routes import router as intelligence_router
 from .routes import router
 from .simulator import SimulatorClient, SimulatorError
@@ -53,6 +54,7 @@ app = FastAPI(title="Fuel Supply Intelligence and Resilience Platform", lifespan
 app.include_router(router)
 app.include_router(intelligence_router)
 app.include_router(decision_router)
+app.include_router(workflow_router)
 
 
 @app.exception_handler(SimulatorError)

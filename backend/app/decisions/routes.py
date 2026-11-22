@@ -21,6 +21,10 @@ from .optimizer import OptimizationError, build_plan
 router = APIRouter(prefix="/v1/recommendations", tags=["Allocation recommendations"])
 
 
+class LogisticsClock(SimulatorClock):
+    status: str | None = None
+
+
 class RecommendationRequest(BaseModel):
     prediction_ids: list[Annotated[int, Field(gt=0, le=2_147_483_647)]] = Field(min_length=1, max_length=24)
 
@@ -48,17 +52,18 @@ async def read_snapshot(simulator: Simulator) -> Snapshot:
         return payload
 
     try:
-        before = SimulatorClock.model_validate(await read("instance"))
+        before = LogisticsClock.model_validate(await read("instance"))
         depots, stations, routes, allocations = await asyncio.gather(
             read("depots"), read("stations"), read("routes"), read("allocations")
         )
-        after = SimulatorClock.model_validate(await read("instance"))
+        after = LogisticsClock.model_validate(await read("instance"))
         snapshot = Snapshot(
-            tick=after.tick, depots=depots, stations=stations, routes=routes, allocations=allocations
+            tick=after.tick, status=after.status, depots=depots, stations=stations, routes=routes,
+            allocations=allocations,
         )
     except ValidationError as exc:
         raise SimulatorError("SIMULATOR_INVALID_RESPONSE", "The simulator logistics snapshot is invalid.", 502) from exc
-    if before.tick != after.tick:
+    if before != after:
         raise failure(409, "SNAPSHOT_MOVED", "The simulator advanced during the snapshot. Retry the request.")
     return snapshot
 

@@ -149,6 +149,11 @@ th, td { padding: 10px; border-bottom: 1px solid var(--line); }
 th { color: var(--muted); background: #f3f7f4; white-space: nowrap; }
 tbody tr:last-child td { border-bottom: none; }
 .service-info { color: var(--muted); min-height: 40px; }
+.workflow-note { color: var(--muted); margin-block: 10px; line-height: 1.45; }
+.workflow-action { margin-bottom: 10px; }
+.workflow-table { margin-top: 12px; }
+.shipment-filter { display: flex; gap: 8px; align-items: center; font-size: .88rem; }
+.shipment-filter select { min-width: 130px; }
 
 @media (max-width: 1080px) {
   .layout { grid-template-columns: 215px minmax(0, 1fr); }
@@ -174,6 +179,8 @@ tbody tr:last-child td { border-bottom: none; }
   main { gap: 13px; padding-top: 22px; }
   .topbar { padding-inline: 12px; }
   .breadcrumb > :not(strong) { display: none; }
+  .breadcrumb { min-width: 0; }
+  .breadcrumb strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .breadcrumb strong, .top-status { font-size: .82rem; }
   .top-status { gap: 7px; }
   .secondary { padding: 7px; }

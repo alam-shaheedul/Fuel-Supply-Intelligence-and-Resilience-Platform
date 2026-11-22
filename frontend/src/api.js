@@ -27,6 +27,7 @@ const reads = {
   stations: '/v1/stations',
   routes: '/v1/routes',
   metrics: '/v1/metrics',
+  allocations: '/v1/allocations',
   history: '/v1/recommendations?limit=50',
 }
 
